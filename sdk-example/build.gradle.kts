@@ -1,3 +1,6 @@
+import org.web3j.solidity.gradle.plugin.CombinedOutputComponent
+import org.web3j.solidity.gradle.plugin.EVMVersion
+import org.web3j.solidity.gradle.plugin.OutputComponent
 
 repositories {
     mavenCentral()
@@ -12,11 +15,21 @@ repositories {
 
 plugins {
     id("java")
+    id("org.web3j.solidity") version "0.3.6"
 }
 
 version "1.0-SNAPSHOT"
 
+sourceSets {
+    main {
+        resources {
+            srcDir("build/resources")
+        }
+    }
+}
+
 dependencies {
+
     implementation("com.hedera.hashgraph:sdk:2.19.0")
     implementation("io.grpc:grpc-netty-shaded:1.46.0")
     implementation("io.github.cdimascio:dotenv-java:2.3.2")
@@ -26,8 +39,27 @@ dependencies {
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.8.1")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.8.1")
+
 }
 
 tasks.test {
    useJUnitPlatform()
+}
+
+solidity {
+    evmVersion = EVMVersion.LONDON
+    setOutputComponents(OutputComponent.ABI,
+        OutputComponent.ASM_JSON,
+        OutputComponent.BIN,
+        OutputComponent.BIN_RUNTIME,
+        OutputComponent.HASHES,
+        OutputComponent.METADATA)
+    setCombinedOutputComponents(CombinedOutputComponent.ABI,
+        CombinedOutputComponent.BIN,
+        CombinedOutputComponent.BIN_RUNTIME,
+        CombinedOutputComponent.HASHES,
+        CombinedOutputComponent.INTERFACE,
+        CombinedOutputComponent.METADATA,
+        CombinedOutputComponent.SRCMAP,
+        CombinedOutputComponent.SRCMAP_RUNTIME)
 }

@@ -29,4 +29,4 @@ contract HelloHedera {
     function kill() public { if (msg.sender == owner) selfdestruct(payable(msg.sender)); }
 }
 
-# compiled at https://remix.ethereum.org
+// compiled at https://remix.ethereum.org

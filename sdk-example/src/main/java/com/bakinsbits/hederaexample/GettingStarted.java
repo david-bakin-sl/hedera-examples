@@ -2,6 +2,7 @@ package com.bakinsbits.hederaexample;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import com.hedera.hashgraph.sdk.AccountBalanceQuery;
 import com.hedera.hashgraph.sdk.AccountCreateTransaction;
 import com.hedera.hashgraph.sdk.AccountId;
@@ -23,6 +24,7 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 import io.github.cdimascio.dotenv.Dotenv;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.TimeoutException;
 
@@ -36,7 +38,10 @@ public class GettingStarted {
   public record ContractInfo(@NonNull FileId fileId, @NonNull ContractId contractId) {}
 
   public static void main(String[] args)
-      throws PrecheckStatusException, TimeoutException, ReceiptStatusException, InterruptedException {
+      throws PrecheckStatusException,
+          TimeoutException,
+          ReceiptStatusException,
+          InterruptedException {
 
     // https://docs.hedera.com/hedera/getting-started/environment-set-up
 
@@ -59,9 +64,18 @@ public class GettingStarted {
       switch (arg.toLowerCase()) {
         case "ca" -> newAccount = createAnAccountAndTransferHbar(myPrimaryTestnetAccount, client);
         case "dsc" -> newContract = deploySmartContract(client);
-        case "csc" -> { Objects.requireNonNull(newContract); contractMessage = callSmartContract(client, newContract); }
-        case "mcs" -> { Objects.requireNonNull(newContract); modifyContractState(client, newContract); }
-        case "sl" -> { System.out.printf("Sleeping 1s...%n"); Thread.sleep(1000); }
+        case "csc" -> {
+          Objects.requireNonNull(newContract);
+          contractMessage = callSmartContract(client, newContract);
+        }
+        case "mcs" -> {
+          Objects.requireNonNull(newContract);
+          modifyContractState(client, newContract);
+        }
+        case "sl" -> {
+          System.out.printf("Sleeping 1s...%n");
+          Thread.sleep(1000);
+        }
 
         default -> System.out.printf("*** Unknown argument: '%s'%n", args[0]);
       }
@@ -74,11 +88,13 @@ public class GettingStarted {
     // https://docs.hedera.com/hedera/getting-started/try-examples/deploy-your-first-smart-contract#5.-call-the-set_message-contract-function
     System.out.printf("MCS: modifyContractState%n");
 
-    var contractExecTx = new ContractExecuteTransaction()
-        .setContractId(contractInfo.contractId())
-        .setGas(100_000)
-        .setFunction("set_message", new ContractFunctionParameters()
-            .addString("Hello from Hedera, again!"));
+    var contractExecTx =
+        new ContractExecuteTransaction()
+            .setContractId(contractInfo.contractId())
+            .setGas(100_000)
+            .setFunction(
+                "set_message",
+                new ContractFunctionParameters().addString("Hello from Hedera, again!"));
     var contractExecTxResponse = contractExecTx.execute(client);
     var contractExecTxReceipt = contractExecTxResponse.getReceipt(client);
 
@@ -105,6 +121,32 @@ public class GettingStarted {
     return message;
   }
 
+  private static byte[] getContractBytecodeFromResource(
+      @NonNull final String resourceName, final String... pathComponents) {
+    final var root = getJsonResource(resourceName);
+    final var leaf = getJsonPrimitive(root, pathComponents);
+    return leaf.getAsString().getBytes(StandardCharsets.UTF_8);
+  }
+
+  private static JsonObject getJsonResource(@NonNull final String resourceName) {
+    var gson = new Gson();
+    var jsonStream = GettingStarted.class.getClassLoader().getResourceAsStream(resourceName);
+    Objects.requireNonNull(jsonStream, "resource not found: '%s'".formatted(resourceName));
+    var jsonObject =
+        gson.fromJson(new InputStreamReader(jsonStream, StandardCharsets.UTF_8), JsonObject.class);
+    Objects.requireNonNull(jsonObject, "json not parsed: '%s'".formatted(resourceName));
+    return jsonObject;
+  }
+
+  private static JsonPrimitive getJsonPrimitive(
+      @NonNull final JsonObject root, final String... pathComponents) {
+    var jsonObject = root;
+    for (final var c : Arrays.stream(pathComponents).limit(pathComponents.length - 1).toList()) {
+      jsonObject = jsonObject.getAsJsonObject(c);
+    }
+    return jsonObject.getAsJsonPrimitive(pathComponents[pathComponents.length - 1]);
+  }
+
   private static ContractInfo deploySmartContract(@NonNull final Client client)
       throws PrecheckStatusException, TimeoutException, ReceiptStatusException {
     // https://docs.hedera.com/hedera/getting-started/try-examples/deploy-your-first-smart-contract#2.-store-the-smart-contract-bytecode-on-hedera
@@ -114,16 +156,12 @@ public class GettingStarted {
     // Load smart contract from json and store it on Hedera.  Uses `FileCreateTransaction`
     // (alternative is to use `CreateContractFlow` to create file and deploy in one go)
 
-    var gson = new Gson();
-
-    var jsonStream = GettingStarted.class.getClassLoader().getResourceAsStream("HelloHedera.json");
-    Objects.requireNonNull(jsonStream, "'HelloHedera.json' resource not fetched");
-
-    var jsonObject =
-        gson.fromJson(new InputStreamReader(jsonStream, StandardCharsets.UTF_8), JsonObject.class);
-    var object =
-        jsonObject.getAsJsonObject("data").getAsJsonObject("bytecode").get("object").getAsString();
-    var bytecode = object.getBytes(StandardCharsets.UTF_8);
+    var bytecode =
+        getContractBytecodeFromResource(
+            "solidity/HelloHedera.json",
+            "contracts",
+            "src/main/solidity/HelloHedera.sol:HelloHedera",
+            "bin");
 
     // Create a file on Hedera containing the contract's bytecodes (hex-encoded); client
     // has account to pay the fee
